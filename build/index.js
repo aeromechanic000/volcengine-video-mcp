@@ -36,29 +36,63 @@ server.tool("generate_video", "Generate AI videos via Volcengine. Supports Text-
                 console.error(`Warning: Reference file not found at ${absRefPath}`);
             }
         }
-        console.error(`Status: Requesting video from ${model}...`);
-        const response = await axios.post("https://ark.cn-beijing.volces.com/api/v3/video/generations", {
+        console.error(`Status: Requesting video generation task from ${model}...`);
+        // Step 1: Create the video generation task
+        const createResponse = await axios.post("https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks", {
             model: model,
             prompt: prompt,
             ...extraParams,
-            response_format: "b64_json"
         }, {
             headers: {
                 "Authorization": `Bearer ${apiKey}`,
                 "Content-Type": "application/json"
             },
-            timeout: 300000 // 5-minute timeout for video generation
+            timeout: 60000 // 60-second timeout for task creation
         });
-        const videoB64 = response.data.data[0].b64_json;
-        const buffer = Buffer.from(videoB64, 'base64');
-        const absoluteSavePath = path.resolve(process.cwd(), savePath);
-        const dir = path.dirname(absoluteSavePath);
-        if (!fs.existsSync(dir))
-            fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(absoluteSavePath, buffer);
-        return {
-            content: [{ type: "text", text: `✅ Video success! Saved to: ${absoluteSavePath}\nModel: ${model}` }]
-        };
+        const taskId = createResponse.data.id;
+        console.error(`Status: Task created with ID: ${taskId}`);
+        // Step 2: Poll for task completion
+        let taskStatus = "processing";
+        let attempts = 0;
+        const maxAttempts = 120; // 2 minutes max (1s intervals)
+        const pollInterval = 1000;
+        while (taskStatus === "processing" && attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, pollInterval));
+            const statusResponse = await axios.get(`https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks/${taskId}`, {
+                headers: {
+                    "Authorization": `Bearer ${apiKey}`
+                },
+                timeout: 30000
+            });
+            taskStatus = statusResponse.data.status;
+            console.error(`Status: Task status: ${taskStatus} (${attempts + 1}/${maxAttempts})`);
+            if (taskStatus === "succeed") {
+                // Step 3: Download the video
+                const videoUrl = statusResponse.data.video_url;
+                console.error(`Status: Video ready, downloading from ${videoUrl}...`);
+                const videoResponse = await axios.get(videoUrl, {
+                    responseType: "arraybuffer",
+                    timeout: 60000
+                });
+                const absoluteSavePath = path.resolve(process.cwd(), savePath);
+                const dir = path.dirname(absoluteSavePath);
+                if (!fs.existsSync(dir))
+                    fs.mkdirSync(dir, { recursive: true });
+                fs.writeFileSync(absoluteSavePath, videoResponse.data);
+                return {
+                    content: [{ type: "text", text: `✅ Video success! Saved to: ${absoluteSavePath}\nModel: ${model}\nTask ID: ${taskId}` }]
+                };
+            }
+            if (taskStatus === "failed") {
+                const errorMsg = statusResponse.data.error_message || "Unknown error";
+                return { isError: true, content: [{ type: "text", text: `❌ Video Gen Failed: Task failed with error: ${errorMsg}` }] };
+            }
+            attempts++;
+        }
+        if (attempts >= maxAttempts) {
+            return { isError: true, content: [{ type: "text", text: "❌ Video Gen Failed: Task timed out after maximum polling time" }] };
+        }
+        return { isError: true, content: [{ type: "text", text: `❌ Video Gen Failed: Unexpected task status: ${taskStatus}` }] };
     }
     catch (error) {
         const status = error.response?.status;

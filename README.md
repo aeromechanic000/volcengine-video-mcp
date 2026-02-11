@@ -8,7 +8,6 @@ A Model Context Protocol (MCP) server that enables **Claude Code** to generate h
 - **Text-to-Video**: Generate cinematic clips from natural language descriptions.
 - **Image-to-Video**: Transform static images into dynamic videos using local reference files.
 - **State-of-the-Art Model**: Defaults to `doubao-seedance-1-5-pro-251215` for industry-leading quality.
-- **Automated Skill Setup**: Includes a dedicated script to configure Claude's internal instructions.
 
 ---
 
@@ -18,19 +17,9 @@ A Model Context Protocol (MCP) server that enables **Claude Code** to generate h
 Add the video generation tool to your Claude Code environment:
 ```bash
 claude mcp add volc-vid -- npx -y @aeromechanic/volcengine-video-mcp
-
 ```
 
-### 2. Install the Skill
-
-Teach Claude how to use the tool optimally (handling models, paths, and prompts):
-
-```bash
-npx @aeromechanic/volcengine-video-mcp skill-install
-
-```
-
-### 3. Set Your API Key
+### 2. Set Your API Key
 
 Set your VolcEngine API key as an environment variable (add this to your `.zshrc` or `.bashrc` for persistence):
 
@@ -56,11 +45,13 @@ Once installed, you can simply ask Claude in plain English:
 * **Model Endpoint**: You must have a valid **Endpoint ID** created in the [Volcengine Ark Console](https://www.volcengine.com/product/ark) for the `doubao-seedance-1-5-pro-251215` model.
 * **Environment**: Ensure `DOUBAO_API_KEY` is set before starting your Claude Code session.
 
+> **Tip**: The included `SKILL.md` file contains optional instructions you can add to your Claude Code configuration to help Claude better understand how to use this tool.
+
 ## 📂 Project Structure
 
 * `src/index.ts`: The core MCP server logic.
-* `SKILL.md`: Procedural instructions for Claude Code to handle video workflows.
-* `package.json`: Project metadata and `skill-install` automation script.
+* `SKILL.md`: (Optional) Procedural instructions for Claude Code to handle video workflows.
+* `package.json`: Project metadata.
 
 ---
 
