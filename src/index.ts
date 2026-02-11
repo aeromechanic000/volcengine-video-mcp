@@ -95,7 +95,7 @@ server.tool(
       const maxAttempts = 120; // 2 minutes max (1s intervals)
       const pollInterval = 1000;
 
-      while (taskStatus === "processing" && attempts < maxAttempts) {
+      while ((taskStatus === "processing" || taskStatus === "running") && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, pollInterval));
 
         const statusResponse = await axios.get(

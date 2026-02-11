@@ -1,6 +1,6 @@
 {
   "name": "@aeromechanic/volcengine-video-mcp",
-  "version": "1.5.2",
+  "version": "1.5.4",
   "description": "Volcengine Video Generation MCP for Claude Code",
   "main": "build/index.js",
   "type": "module",
