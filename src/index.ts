@@ -5,11 +5,64 @@ import { z } from "zod";
 import axios from "axios";
 import fs from "fs";
 import path from "path";
+import https from "https";
+import http from "http";
 
 const server = new McpServer({
   name: "volcengine-video-mcp",
   version: "1.1.0",
 });
+
+/**
+ * Download a file from URL to local path with redirect handling
+ */
+function downloadFile(url: string, destPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const protocol = url.startsWith('https') ? https : http;
+
+    const file = fs.createWriteStream(destPath);
+
+    protocol.get(url, (response) => {
+      // Handle redirects
+      if (response.statusCode === 302 || response.statusCode === 301) {
+        const redirectUrl = response.headers.location;
+        if (redirectUrl) {
+          console.error(`Status: Following redirect to ${redirectUrl}`);
+          file.close();
+          fs.unlink(destPath, () => {}); // Delete partial file
+          downloadFile(redirectUrl, destPath)
+            .then(resolve)
+            .catch(reject);
+          return;
+        }
+      }
+
+      if (response.statusCode !== 200) {
+        file.close();
+        fs.unlink(destPath, () => {}); // Delete partial file
+        reject(new Error(`Failed to download: HTTP ${response.statusCode}`));
+        return;
+      }
+
+      response.pipe(file);
+
+      file.on('finish', () => {
+        file.close();
+        resolve();
+      });
+    }).on('error', (err) => {
+      file.close();
+      fs.unlink(destPath, () => {}); // Delete partial file
+      reject(err);
+    });
+
+    file.on('error', (err) => {
+      file.close();
+      fs.unlink(destPath, () => {}); // Delete partial file
+      reject(err);
+    });
+  });
+}
 
 server.tool(
   "generate_video",
@@ -118,18 +171,14 @@ server.tool(
           if (!videoUrl) {
             return { isError: true, content: [{ type: "text", text: `❌ Video Gen Failed: No video URL in response` }] };
           }
-          console.error(`Status: Video ready, downloading from ${videoUrl}...`);
-
-          const videoResponse = await axios.get(videoUrl, {
-            responseType: "arraybuffer",
-            timeout: 60000
-          });
+          console.error(`Status: Video ready. URL: ${videoUrl}`);
 
           const absoluteSavePath = path.resolve(process.cwd(), savePath);
           const dir = path.dirname(absoluteSavePath);
           if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-          fs.writeFileSync(absoluteSavePath, videoResponse.data);
+          console.error(`Status: Downloading to ${absoluteSavePath}...`);
+          await downloadFile(videoUrl, absoluteSavePath);
 
           return {
             content: [{ type: "text", text: `✅ Video success! Saved to: ${absoluteSavePath}\nModel: ${model}\nTask ID: ${taskId}` }]
